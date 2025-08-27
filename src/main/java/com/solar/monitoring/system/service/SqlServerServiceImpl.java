@@ -17,6 +17,11 @@ public class SqlServerServiceImpl implements ISqlServerService {
     @Autowired
     private ISqlServerDataRepository sqlServerDataRepository;
     
+    /**
+     * Retrieves all SqlServerData records that are not marked as processed, ordered by creation time ascending.
+     *
+     * @return a list of unprocessed SqlServerData entities ordered by createdAt (oldest first)
+     */
     @Override
     @Retry(name = "sqlserver")
     public List<SqlServerData> fetchUnprocessedData() {
@@ -30,6 +35,13 @@ public class SqlServerServiceImpl implements ISqlServerService {
         }
     }
     
+    /**
+     * Marks the SqlServerData record with the given id as processed.
+     *
+     * Updates the persistent record identified by the provided primary key so it is no longer considered unprocessed.
+     *
+     * @param id the ID of the SqlServerData record to mark as processed
+     */
     @Override
     @Transactional
     @Retry(name = "sqlserver")
@@ -43,6 +55,14 @@ public class SqlServerServiceImpl implements ISqlServerService {
         }
     }
     
+    /**
+     * Persists the given SqlServerData and returns the saved entity.
+     *
+     * The returned instance reflects any modifications made by the repository (for example generated IDs or auditing timestamps).
+     *
+     * @param data the SqlServerData to persist
+     * @return the saved SqlServerData instance
+     */
     @Override
     @Retry(name = "sqlserver")
     public SqlServerData saveRawData(SqlServerData data) {

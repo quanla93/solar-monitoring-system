@@ -22,6 +22,15 @@ public class KafkaServiceImpl extends AbstractKafkaService {
     @Value("${app.kafka.topic.solar-metrics:solar-metrics}")
     private String solarMetricsTopic;
     
+    /**
+     * Serializes a SolarMetricsDto and publishes it to the given Kafka topic using the DTO's machineId as the message key.
+     *
+     * <p>The method delegates serialization to the superclass and uses the injected KafkaTemplate to send the message.
+     * Any exception encountered while sending is propagated to the caller.</p>
+     *
+     * @param topic   the Kafka topic to send the message to
+     * @param message the solar metrics payload; its {@code machineId} is used as the Kafka message key
+     */
     @Override
     @Retry(name = "kafka-producer")
     public void sendMessage(String topic, SolarMetricsDto message) {
@@ -35,6 +44,15 @@ public class KafkaServiceImpl extends AbstractKafkaService {
         }
     }
     
+    /**
+     * Kafka listener for the solar metrics topic; receives raw message payloads and forwards them to the data processing service.
+     *
+     * Subscribes to the topic configured by `app.kafka.topic.solar-metrics` (default "solar-metrics").
+     * On success the payload is passed to IDataProcessingService.processRealTimeData.
+     * If processing fails the exception is caught and IDataProcessingService.handleFailure is invoked with the error message and original payload.
+     *
+     * @param message raw message payload from the Kafka topic
+     */
     @Override
     @KafkaListener(topics = "${app.kafka.topic.solar-metrics:solar-metrics}")
     public void consumeMessage(String message) {
