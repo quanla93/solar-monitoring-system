@@ -35,6 +35,19 @@ public class DataProcessingServiceImpl implements IDataProcessingService {
     @Autowired
     private DataParser dataParser;
     
+    /**
+     * Orchestrates a bulk data processing pipeline: fetches unprocessed records from SQL Server,
+     * processes each record (persisting parsed metrics to Redis and MongoDB), and marks successful
+     * records as processed.
+     *
+     * <p>Per-record errors are handled individually (they are logged and delegated to {@code handleFailure})
+     * so a failure processing one record does not abort the whole run. A UUID syncId is generated for
+     * the pipeline run and included in the returned response. This method is protected by a circuit
+     * breaker and retry policy; a configured fallback method will be invoked if the circuit breaker opens.
+     *
+     * @return a SyncResponseDto summarizing the run: status (e.g., "SUCCESS", "FAILED", or fallback state),
+     *         a human-readable message, the number of records successfully processed, and the generated syncId
+     */
     @Override
     @CircuitBreaker(name = "data-processing", fallbackMethod = "processDataPipelineFallback")
     @Retry(name = "data-processing")
@@ -76,6 +89,13 @@ public class DataProcessingServiceImpl implements IDataProcessingService {
         }
     }
     
+    /**
+     * Asynchronously processes a single real-time payload: parses the input, persists the resulting
+     * metrics to Redis (real-time view) and MongoDB (historical store), and logs success or delegates
+     * failures to centralized error handling.
+     *
+     * @param rawData the raw payload string containing metric data (expected format parseable by DataParser)
+     */
     @Override
     @Async
     public void processRealTimeData(String rawData) {
@@ -96,6 +116,16 @@ public class DataProcessingServiceImpl implements IDataProcessingService {
         }
     }
     
+    /**
+     * Centralized failure handler for processing errors.
+     *
+     * <p>Records a processing failure for the given data and error message. Intended as a single
+     * place to route failed payloads to a dead-letter queue, retry mechanism, or alerting; current
+     * implementation only logs the failure.
+     *
+     * @param errorMessage human-readable error message describing the failure
+     * @param data the raw or serialized payload that failed processing
+     */
     @Override
     public void handleFailure(String errorMessage, String data) {
         log.error("Handling failure: {} for  {}", errorMessage, data);
@@ -103,6 +133,12 @@ public class DataProcessingServiceImpl implements IDataProcessingService {
         // For now, just log the failure
     }
     
+    /**
+     * Processes a single SqlServerData record: parses its payload into a SolarMetricsDto
+     * and persists the resulting metrics to Redis (real-time view) and MongoDB (historical).
+     *
+     * @param data the SQL Server record whose dataContent will be parsed and persisted
+     */
     private void processingSingleRecord(SqlServerData data) {
         SolarMetricsDto metrics = dataParser.parseToMetrics(data.getDataContent());
         
@@ -115,6 +151,14 @@ public class DataProcessingServiceImpl implements IDataProcessingService {
         log.debug("Processed record for machine: {}", metrics.getMachineId());
     }
     
+    /**
+     * Circuit-breaker fallback for the data-processing pipeline.
+     *
+     * Returns a SyncResponseDto indicating the pipeline is unavailable when the circuit breaker is open.
+     *
+     * @param ex the triggering exception from the primary pipeline execution; its message is included in the response
+     * @return a SyncResponseDto with status "CIRCUIT_BREAKER_OPEN", zero processed records, and a "FALLBACK" syncId
+     */
     public SyncResponseDto processDataPipelineFallback(Exception ex) {
         return SyncResponseDto.builder()
             .status("CIRCUIT_BREAKER_OPEN")

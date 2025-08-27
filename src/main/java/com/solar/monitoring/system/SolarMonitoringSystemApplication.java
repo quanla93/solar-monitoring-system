@@ -12,6 +12,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class SolarMonitoringSystemApplication {
 
+    /**
+     * Application entry point; bootstraps and starts the Spring application context.
+     *
+     * Invokes SpringApplication.run(...) to initialize and launch the Spring Boot
+     * application (Kafka, async processing, and scheduling are enabled via class
+     * annotations).
+     *
+     * @param args command-line arguments forwarded to SpringApplication
+     */
     public static void main(String[] args) {
         SpringApplication.run(SolarMonitoringSystemApplication.class, args);
     }

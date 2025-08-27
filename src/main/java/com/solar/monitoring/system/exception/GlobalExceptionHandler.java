@@ -15,6 +15,19 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     
+    /**
+     * Handles MethodArgumentNotValidException thrown by controller input validation and
+     * converts it into a 400 Bad Request response.
+     *
+     * The response body is a Map with the following keys:
+     * - "timestamp": current server time
+     * - "status": HTTP status code (400)
+     * - "error": short error label ("Validation Failed")
+     * - "errors": a Map<String, String> mapping each invalid field name to its validation message
+     *
+     * @param ex the validation exception containing binding results and field errors
+     * @return a ResponseEntity with status 400 and a structured body describing validation failures
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, Object> response = new HashMap<>();
@@ -31,6 +44,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(response);
     }
     
+    /**
+     * Handles any uncaught exceptions from controllers and returns a standardized 500 response.
+     *
+     * <p>Logs the exception and builds a response body containing:
+     * <ul>
+     *   <li>timestamp - the time the error occurred</li>
+     *   <li>status - HTTP status code 500</li>
+     *   <li>error - short error label "Internal Server Error"</li>
+     *   <li>message - the exception's message</li>
+     * </ul>
+     *
+     * @param ex the unhandled exception
+     * @return a ResponseEntity with HTTP 500 and a map containing error details
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
         log.error("Unhandled exception: ", ex);
