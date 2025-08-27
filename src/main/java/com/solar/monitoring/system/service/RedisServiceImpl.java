@@ -11,6 +11,16 @@ import java.util.Optional;
 @Service
 public class RedisServiceImpl extends AbstractRedisService {
     
+    /**
+     * Persist the given SolarMetricsDto in Redis for the specified machine.
+     *
+     * The method derives the Redis key from the supplied machineId, stores the
+     * metrics under that key with the service's default TTL, and propagates any
+     * runtime exception encountered during the operation.
+     *
+     * @param machineId the identifier of the machine; used to build the Redis key
+     * @param metrics   the metrics payload to persist
+     */
     @Override
     @Retry(name = "redis")
     public void saveMetrics(String machineId, SolarMetricsDto metrics) {
@@ -24,6 +34,16 @@ public class RedisServiceImpl extends AbstractRedisService {
         }
     }
     
+    /**
+     * Retrieves stored SolarMetricsDto for the given machine id from Redis.
+     *
+     * Retrieves the metrics by building the Redis key from the provided machineId and returning the value
+     * wrapped in an Optional. If no value is found, returns Optional.empty(). On Redis access errors this
+     * method logs the failure and returns Optional.empty().
+     *
+     * @param machineId the identifier of the machine whose metrics are being retrieved; used to build the Redis key
+     * @return an Optional containing the stored SolarMetricsDto if present, otherwise Optional.empty()
+     */
     @Override
     public Optional<SolarMetricsDto> getMetrics(String machineId) {
         try {
@@ -36,6 +56,14 @@ public class RedisServiceImpl extends AbstractRedisService {
         }
     }
     
+    /**
+     * Removes persisted SolarMetricsDto for the given machine from Redis.
+     *
+     * <p>Builds the Redis key from {@code machineId} and deletes the corresponding entry.
+     * Any exception during deletion is caught and logged; the method does not propagate exceptions.</p>
+     *
+     * @param machineId identifier of the machine whose metrics should be deleted (used to derive the Redis key)
+     */
     @Override
     public void deleteMetrics(String machineId) {
         try {
@@ -47,6 +75,12 @@ public class RedisServiceImpl extends AbstractRedisService {
         }
     }
     
+    /**
+     * Checks whether metrics for the given machineId exist in Redis.
+     *
+     * @param machineId the machine identifier used to derive the Redis key
+     * @return true if the Redis key exists and contains metrics; false if the key does not exist or an error occurs while checking
+     */
     @Override
     public boolean exists(String machineId) {
         try {
