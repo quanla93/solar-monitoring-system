@@ -1,5 +1,7 @@
 package com.solar.monitoring.system.config;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -21,7 +23,22 @@ public class KafkaConfig {
     
     @Value("${spring.kafka.consumer.group-id:solar-monitoring-group}")
     private String groupId;
-    
+
+    @Bean
+    public Counter kafkaMessagesProcessed(MeterRegistry meterRegistry) {
+        return Counter.builder("kafka.messages.processed.total")
+                .description("Total number of Kafka messages processed")
+                .register(meterRegistry);
+    }
+
+    @Bean
+    public Counter kafkaMessagesError(MeterRegistry meterRegistry) {
+        return Counter.builder("kafka.messages.error.total")
+                .description("Total number of Kafka message processing errors")
+                .register(meterRegistry);
+    }
+
+
     /**
      * Creates and configures a ProducerFactory<String, String> for producing Kafka messages.
      *
