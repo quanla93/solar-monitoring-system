@@ -1,4 +1,4 @@
-package com.solar_monitoring_system.solar_monitoring_system;
+package com.solar.monitoring.system;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
