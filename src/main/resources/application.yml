@@ -1,0 +1,135 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: Solar Power Plant Monitoring System
+
+  # SQL Server Configuration
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=solar_plant;encrypt=false
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:your_password}
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.SQLServerDialect
+        format_sql: true
+
+  # MongoDB Configuration
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USERNAME:admin}:${MONGO_PASSWORD:password}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DATABASE:solar_metrics}?authSource=admin
+
+  # Redis Configuration
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    consumer:
+      group-id: solar-monitoring-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: /
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      mongodb-service:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+      redis-service:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 15s
+        sliding-window-size: 8
+        minimum-number-of-calls: 3
+  retry:
+    instances:
+      data-processing:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+
+# Custom Application Configuration
+app:
+  messaging:
+    kafka:
+      topics:
+        solar-metrics: solar-metrics-topic
+        dlq: solar-metrics-dlq
+    rabbitmq:
+      exchange: solar-metrics-exchange
+      queue: solar-metrics-queue
+      routing-key: solar.metrics
+      dlq: solar-metrics-dlq
+
+  redis:
+    key-prefix: solar:metrics:
+    ttl: 3600 # 1 hour in seconds
+
+  scheduler:
+    sync-interval: 300000 # 5 minutes in milliseconds
+    cleanup-interval: 86400000 # 24 hours in milliseconds
+
+  backup:
+    enabled: true
+    directory: ${BACKUP_DIR:/var/backup/solar-metrics}
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    com.solarplant: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.amqp: INFO
+    org.springframework.data.mongodb: INFO
+    org.hibernate: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/solar-monitoring.log
