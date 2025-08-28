@@ -2,42 +2,43 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "**" ]
   pull_request:
     branches: [ "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: dev
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
-
+          #      - name: Run Tests
+          #        run: mvn test
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-#      - name: Run Tests
-#        run: mvn test
-
-      - name: Build Docker image
-        run: docker build -t solar-monitoring-system:${GITHUB_SHA::7} .
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v3
 
       - name: Login to Docker Hub
-        if: github.ref == 'refs/heads/master'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
+      - name: Build Docker image
+        run: docker build -t solar-monitoring-system:${GITHUB_SHA::7} .
+
       - name: Push Docker image
-        if: github.ref == 'refs/heads/master'
         run: |
           docker tag solar-monitoring-system:${GITHUB_SHA::7} ${{ secrets.DOCKER_HUB_USERNAME }}/solar-monitoring-system:latest
           docker push ${{ secrets.DOCKER_HUB_USERNAME }}/solar-monitoring-system:latest
