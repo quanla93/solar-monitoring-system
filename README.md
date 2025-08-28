@@ -2,6 +2,11 @@
 
 A comprehensive Spring Boot application for monitoring solar power plant metrics with real-time processing and historical data analysis.
 
+## Project Flow
+
+<img width="3600" height="415" alt="solar_monitoring_system_flow_hd" src="https://github.com/user-attachments/assets/a4ff8abd-7d64-4a77-b558-5a60ccc9f759" />
+
+
 ## Project Structure
 
 ```
