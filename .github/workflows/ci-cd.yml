@@ -107,13 +107,14 @@ jobs:
   docker-build:
     name: Build Docker Images
     runs-on: ubuntu-latest
+    environment: dev
     needs: build-and-test
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
 
     strategy:
       matrix:
         service:
-          - solar-data-processing-service
+#          - solar-data-processing-service
           - solar-redis-service
           - solar-kafka-service
 
@@ -226,10 +227,7 @@ jobs:
 #    needs: [docker-build, integration-test]
     needs: docker-build
     if: github.ref == 'refs/heads/master'
-    environment:
-      name: production
-      url: https://solar-monitoring.yourdomain.com
-    
+    environment:  env
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
