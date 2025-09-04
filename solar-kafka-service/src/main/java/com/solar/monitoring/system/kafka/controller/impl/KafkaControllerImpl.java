@@ -16,6 +16,16 @@ import java.util.Map;
 @RequestMapping("/api")
 public class KafkaControllerImpl implements IKafkaController {
 
+    /**
+     * Returns a simple health payload for the service.
+     *
+     * The response body is a map with keys:
+     * - "status": set to "UP"
+     * - "service": set to "solar-kafka-service"
+     * - "timestamp": current server LocalDateTime as an ISO-8601 string
+     *
+     * @return ResponseEntity containing the health map (HTTP 200)
+     */
     @GetMapping("/health")
     @Override
     public ResponseEntity<Map<String, String>> health() {
@@ -29,6 +39,11 @@ public class KafkaControllerImpl implements IKafkaController {
         return ResponseEntity.ok(health);
     }
 
+    /**
+     * Logs a debug-level message indicating that a health check was requested.
+     *
+     * Used by the health endpoint to record invocation for diagnostics.
+     */
     protected void logHealthCheck() {
         log.debug("Health check requested");
     }

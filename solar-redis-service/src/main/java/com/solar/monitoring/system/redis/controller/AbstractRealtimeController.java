@@ -13,6 +13,11 @@ import org.springframework.web.bind.annotation.RestController;
 public abstract class AbstractRealtimeController implements IRealtimeController {
     protected final IRealtimeService realtimeService;
 
+    /**
+     * Logs an info-level message indicating that realtime data for the given machine is being retrieved.
+     *
+     * @param machineId the identifier of the machine whose realtime data is being requested
+     */
     protected void logRequest(String machineId) {
         log.info("Retrieving realtime data for machine: {}", machineId);
     }

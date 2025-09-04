@@ -23,6 +23,16 @@ public class KafkaConsumerConfig {
     @Value("${spring.kafka.consumer.group-id}")
     private String groupId;
 
+    /**
+     * Creates a ConsumerFactory for consuming SolarEvent messages from Kafka.
+     *
+     * Configures bootstrap servers, consumer group id, key and value deserializers
+     * (String for keys, JSON for SolarEvent values), sets the trusted package for
+     * JSON deserialization to "com.solar.monitoring.system.*" and sets offset reset
+     * to "earliest".
+     *
+     * @return a configured ConsumerFactory<String, SolarEvent>
+     */
     @Bean
     public ConsumerFactory<String, SolarEvent> consumerFactory() {
         Map<String, Object> configProps = new HashMap<>();
@@ -37,6 +47,13 @@ public class KafkaConsumerConfig {
                 new JsonDeserializer<>(SolarEvent.class));
     }
 
+    /**
+     * Spring bean that creates a ConcurrentKafkaListenerContainerFactory for consuming SolarEvent messages.
+     *
+     * The returned factory is configured to use this class's ConsumerFactory<String, SolarEvent> for consumer instances.
+     *
+     * @return a configured ConcurrentKafkaListenerContainerFactory for String keys and SolarEvent values
+     */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, SolarEvent> kafkaListenerContainerFactory() {
         ConcurrentKafkaListenerContainerFactory<String, SolarEvent> factory =

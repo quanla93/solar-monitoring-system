@@ -6,22 +6,22 @@ import java.util.Optional;
 
 public interface IRealtimeService {
     /**
-     * Persist the given solar metrics in Redis under the provided machine identifier.
-     *
-     * Implementations should store or update the metrics associated with the specified
-     * machineId so they can be retrieved later via getMetrics. The method is intended
-     * to perform a single put/replace operation for the given key.
-     *
-     * @param machineId unique identifier of the machine whose metrics are being saved
-     * @param metrics   the metrics payload to persist
-     */
+ * Persist or update realtime solar metrics for a machine in Redis.
+ *
+ * Store or replace the provided RealtimeDataDto under the given machineId so it can
+ * be retrieved later via getRealtimeMetrics(String). Intended as a single put/replace
+ * operation for the key.
+ *
+ * @param machineId non-null unique identifier of the machine whose metrics are being saved
+ * @param metrics   the realtime metrics payload to persist
+ */
     void saveMetrics(String machineId, RealtimeDataDto metrics);
     /**
-     * Retrieves the stored SolarMetricsDto for the given machine identifier.
-     *
-     * @param machineId the unique identifier of the machine whose metrics are being requested
-     * @return an Optional containing the metrics if present, or an empty Optional if no metrics are stored for the given machineId
-     */
+ * Retrieve the realtime metrics for the given machine.
+ *
+ * @param machineId the machine identifier whose realtime metrics are requested
+ * @return an Optional containing the RealtimeDataDto if metrics exist for the given machineId, otherwise an empty Optional
+ */
     Optional<RealtimeDataDto> getRealtimeMetrics(String machineId);
 
     /**
@@ -34,10 +34,10 @@ public interface IRealtimeService {
      */
     void deleteMetrics(String machineId);
     /**
-     * Checks whether metrics for the given machine ID are stored in Redis.
-     *
-     * @param machineId the unique identifier of the machine whose metrics presence is being checked
-     * @return true if metrics exist for the specified machineId, false otherwise
-     */
+ * Returns whether realtime metrics for the given machine ID exist in Redis.
+ *
+ * @param machineId the machine's unique identifier
+ * @return true if metrics are present for the specified machineId, false otherwise
+ */
     boolean exists(String machineId);
 }

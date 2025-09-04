@@ -22,6 +22,15 @@ public class RedisConfig {
     @Value("${spring.data.redis.password}")
     private String password;
 
+    /**
+     * Creates a Lettuce-based RedisConnectionFactory for a standalone Redis instance.
+     *
+     * <p>Uses the configured host, port, and password properties to build a
+     * RedisStandaloneConfiguration and returns a LettuceConnectionFactory initialized
+     * with that configuration.
+     *
+     * @return a RedisConnectionFactory backed by Lettuce for the configured standalone Redis
+     */
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
@@ -31,6 +40,16 @@ public class RedisConfig {
         return new LettuceConnectionFactory(config);
     }
 
+    /**
+     * Creates and configures a RedisTemplate for String keys and JSON-serialized values.
+     *
+     * <p>Configures the template to use the application's RedisConnectionFactory, String serialization
+     * for keys and hash keys, and GenericJackson2JsonRedisSerializer for values, hash values, and as
+     * the default serializer. The template is fully initialized via {@code afterPropertiesSet()}.
+     *
+     * @return a ready-to-use {@code RedisTemplate<String, Object>} configured with string key
+     *         serialization and JSON value serialization
+     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate() {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
