@@ -1,44 +1,279 @@
-name: CI/CD Pipeline
+# .github/workflows/ci-cd.yml
+name: Solar Monitoring System CI/CD Pipeline
 
 on:
   push:
     branches: [ "**" ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "develop" ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+
+env:
+  REGISTRY: docker.io
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: 'temurin'
 
 jobs:
-  build:
+  # Build and Test Job
+  build-and-test:
+    name: Build and Test Services
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+#          - solar-data-processing-service
+          - solar-redis-service
+          - solar-kafka-service
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
-          #      - name: Run Tests
-          #        run: mvn test
-      - name: Build with Maven
-        run: mvn clean package -DskipTests
 
-  deploy:
-    if: github.ref == 'refs/heads/master'
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+#      - name: Run Tests for ${{ matrix.service }}
+#        working-directory: ./${{ matrix.service }}
+#        run: |
+#          if [ -f "pom.xml" ]; then
+#            mvn clean test -B -V
+#          else
+#            echo "No pom.xml found in ${{ matrix.service }}, skipping tests"
+#          fi
+
+      - name: Build ${{ matrix.service }}
+        working-directory: ./${{ matrix.service }}
+        run: |
+          if [ -f "pom.xml" ]; then
+            mvn clean package -DskipTests -B -V
+          else
+            echo "No pom.xml found in ${{ matrix.service }}, skipping build"
+          fi
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-jar
+          path: ./${{ matrix.service }}/target/*.jar
+          retention-days: 1
+
+  # Security Scan Job
+  security-scan:
+    name: Security Scan
     runs-on: ubuntu-latest
-    environment: dev
-    steps:
-      - uses: actions/checkout@v3
+    needs: build-and-test
+    if: github.event_name == 'pull_request'
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Run OWASP Dependency Check
+        run: |
+          for service in solar-data-processing-service solar-redis-service solar-kafka-service; do
+            if [ -d "$service" ] && [ -f "$service/pom.xml" ]; then
+              echo "Running dependency check for $service"
+              cd $service
+              mvn org.owasp:dependency-check-maven:check
+              cd ..
+            fi
+          done
+
+  # Docker Build Job
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+
+    strategy:
+      matrix:
+        service:
+          - solar-data-processing-service
+          - solar-redis-service
+          - solar-kafka-service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build Docker image
-        run: docker build -t solar-monitoring-system:${GITHUB_SHA::7} .
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Push Docker image
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # Integration Tests with Docker Compose
+#  integration-test:
+#    name: Integration Tests
+#    runs-on: ubuntu-latest
+#    needs: docker-build
+#    if: github.ref == 'refs/heads/master'
+#
+#    steps:
+#      - name: Checkout repository
+#        uses: actions/checkout@v4
+#
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v3
+#
+#      - name: Log in to Docker Hub
+#        uses: docker/login-action@v3
+#        with:
+#          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+#          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+#
+#      - name: Create .env file for integration tests
+#        run: |
+#          cat > .env << EOF
+#          DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }}
+#          IMAGE_TAG=master-${GITHUB_SHA::7}
+#          EOF
+#
+#      - name: Update docker-compose for CI
+#        run: |
+#          # Replace build contexts with pre-built images
+#          sed -i 's|build:|#build:|g' docker-compose.yml
+#          sed -i 's|context: \./\(.*\)|#context: ./\1|g' docker-compose.yml
+#          sed -i 's|dockerfile: Dockerfile|#dockerfile: Dockerfile|g' docker-compose.yml
+#
+#          # Add image references
+#          for service in solar-data-processing-service solar-redis-service solar-kafka-service; do
+#            sed -i "/container_name: $service/i\\    image: ${{ secrets.DOCKER_HUB_USERNAME }}/$service:master-${GITHUB_SHA::7}" docker-compose.yml
+#          done
+#
+#      - name: Run integration tests
+#        run: |
+#          docker-compose up -d
+#
+#          # Wait for services to be healthy
+#          timeout 300 bash -c 'until docker-compose ps | grep -E "(healthy|Up)"; do sleep 5; done'
+#
+#          # Run basic health checks
+#          sleep 30
+#
+#          # Test data processing service
+#          curl -f http://localhost:8080/api/health || exit 1
+#
+#          # Test redis service
+#          curl -f http://localhost:8081/actuator/health || exit 1
+#
+#          # Test kafka service
+#          curl -f http://localhost:8082/actuator/health || exit 1
+#
+#          echo "All integration tests passed!"
+#
+#      - name: Cleanup
+#        if: always()
+#        run: |
+#          docker-compose down -v
+#          docker system prune -af
+
+  # Deploy Job
+  deploy:
+    name: Deploy to Environment
+    runs-on: ubuntu-latest
+#    needs: [docker-build, integration-test]
+    needs: docker-build
+    if: github.ref == 'refs/heads/master'
+    environment:
+      name: production
+      url: https://solar-monitoring.yourdomain.com
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
         run: |
-          docker tag solar-monitoring-system:${GITHUB_SHA::7} ${{ secrets.DOCKER_HUB_USERNAME }}/solar-monitoring-system:latest
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/solar-monitoring-system:latest
+          echo "Deploying Solar Monitoring System to production..."
+          echo "Image tags used:"
+          echo "- ${{ secrets.DOCKER_HUB_USERNAME }}/solar-data-processing-service:master-${GITHUB_SHA::7}"
+          echo "- ${{ secrets.DOCKER_HUB_USERNAME }}/solar-redis-service:master-${GITHUB_SHA::7}"
+          echo "- ${{ secrets.DOCKER_HUB_USERNAME }}/solar-kafka-service:master-${GITHUB_SHA::7}"
+          
+#           Here you would typically:
+#           1. SSH to production server
+#           2. Update docker-compose.prod.yml with new image tags
+#           3. Run docker-compose pull && docker-compose up -d
+#           4. Run health checks
+#           5. Notify team of successful deployment
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Solar Monitoring System deployed successfully!"
+          else
+            echo "❌ Deployment failed!"
+          fi
+
+  # Cleanup Job
+  cleanup:
+    name: Cleanup Old Images
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always() && github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Cleanup old Docker images
+        run: |
+          echo "This step would cleanup old Docker images in DockerHub"
+          echo "Keep only the latest 5 versions of each service"
+          # Implementation would use Docker Hub API to delete old tags
