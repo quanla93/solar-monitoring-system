@@ -1,4 +1,4 @@
-# solar-redis-service/Dockerfile
+# solar-kafka-service/Dockerfile
 FROM openjdk:17-jdk-slim
 
 # Set working directory
@@ -37,19 +37,18 @@ COPY --from=0 --chown=appuser:appgroup /app/target/*.jar app.jar
 # Switch to non-root user
 USER appuser
 
-# Health check - checking Redis connection through the service
+# Health check - checking Kafka connection through the service
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8081/actuator/health || exit 1
+    CMD curl -f http://localhost:8082/actuator/health || exit 1
 
 # Expose port
-EXPOSE 8081
+EXPOSE 8082
 
 # Environment variables
 ENV JAVA_OPTS="-Xmx256m -Xms128m" \
     SPRING_PROFILES_ACTIVE=docker \
-    SERVER_PORT=8081 \
-    REDIS_HOST=redis \
-    REDIS_PORT=6379
+    SERVER_PORT=8082 \
+    KAFKA_BOOTSTRAP_SERVERS=kafka:9092
 
 # Entry point with JVM optimization for containers
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /app/app.jar"]

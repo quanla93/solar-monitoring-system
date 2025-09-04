@@ -1,4 +1,6 @@
+# solar-monitoring-system/docker-compose.yml
 version: '3.8'
+
 services:
   # Infrastructure Services
   sqlserver:
@@ -6,12 +8,17 @@ services:
     container_name: solar-sqlserver
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=SolarPassword123!
-      - MSSQL_PID=Express
+      - SA_PASSWORD=Solar123!@#
+      - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P Solar123!@# -Q 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - solar-network
 
@@ -20,23 +27,34 @@ services:
     container_name: solar-mongodb
     environment:
       - MONGO_INITDB_ROOT_USERNAME=solar
-      - MONGO_INITDB_ROOT_PASSWORD=solarpassword
-      - MONGO_INITDB_DATABASE=solardb
+      - MONGO_INITDB_ROOT_PASSWORD=solar123
+      - MONGO_INITDB_DATABASE=solar_monitoring
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - solar-network
 
   redis:
     image: redis:7.2-alpine
     container_name: solar-redis
-    command: redis-server --requirepass solarredis
+    command: redis-server --appendonly yes --requirepass solar123
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - solar-network
 
@@ -46,8 +64,14 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - solar-network
 
@@ -55,17 +79,25 @@ services:
     image: confluentinc/cp-kafka:7.4.0
     container_name: solar-kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
     ports:
-      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - solar-network
 
@@ -76,24 +108,37 @@ services:
       dockerfile: Dockerfile
     container_name: solar-data-processing-service
     depends_on:
-      - sqlserver
-      - mongodb
-      - redis
-      - kafka
+      sqlserver:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:sqlserver://sqlserver:1433;databaseName=SolarDB;encrypt=false
+      - SERVER_PORT=8080
+      - SPRING_DATASOURCE_URL=jdbc:sqlserver://sqlserver:1433;databaseName=SolarMonitoring;encrypt=false
       - SPRING_DATASOURCE_USERNAME=sa
-      - SPRING_DATASOURCE_PASSWORD=SolarPassword123!
-      - SPRING_DATA_MONGODB_URI=mongodb://solar:solarpassword@mongodb:27017/solardb?authSource=admin
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PASSWORD=solarredis
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SPRING_DATASOURCE_PASSWORD=Solar123!@#
+      - SPRING_DATA_MONGODB_URI=mongodb://solar:solar123@mongodb:27017/solar_monitoring?authSource=admin
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=solar123
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SOLAR_REDIS_SERVICE_URL=http://solar-redis-service:8081
+      - SOLAR_KAFKA_SERVICE_URL=http://solar-kafka-service:8082
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks:
       - solar-network
-    restart: unless-stopped
 
   solar-redis-service:
     build:
@@ -101,16 +146,24 @@ services:
       dockerfile: Dockerfile
     container_name: solar-redis-service
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PASSWORD=solarredis
+      - SERVER_PORT=8081
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=solar123
     ports:
       - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks:
       - solar-network
-    restart: unless-stopped
 
   solar-kafka-service:
     build:
@@ -118,21 +171,38 @@ services:
       dockerfile: Dockerfile
     container_name: solar-kafka-service
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SERVER_PORT=8082
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     ports:
       - "8082:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     networks:
       - solar-network
-    restart: unless-stopped
 
 volumes:
   sqlserver_data:
+    driver: local
   mongodb_data:
+    driver: local
   redis_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  zookeeper_logs:
+    driver: local
+  kafka_data:
+    driver: local
 
 networks:
   solar-network:
     driver: bridge
+    name: solar-monitoring-network
