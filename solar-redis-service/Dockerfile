@@ -32,7 +32,7 @@ RUN addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 --gid 1001 appuser
 
 # Copy the built jar
-COPY --chown=appuser:appgroup /app/target/*.jar app.jar
+COPY --chown=appuser:appgroup target/*.jar app.jar
 
 # Switch to non-root user
 USER appuser

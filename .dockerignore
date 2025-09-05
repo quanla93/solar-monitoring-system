@@ -11,6 +11,9 @@ release.properties
 dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
+mvnw
+mvnw.cmd
+.mvn/
 
 # IDE
 .idea/
@@ -125,3 +128,8 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
